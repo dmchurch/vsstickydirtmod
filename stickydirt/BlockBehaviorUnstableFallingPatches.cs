@@ -154,11 +154,15 @@ namespace stickydirt
         public static bool IsReplacableBeneathAndSideways(this BlockBehaviorUnstableFalling _self, IWorldAccessor world, BlockPos pos)
         {
             BlockPos nPos = pos.Copy();
-            foreach ((BlockFacing face, int i) in BlockFacing.HORIZONTALS.WithIndex()) {
-                nPos.Set(nPos).Add(face);
+            foreach (BlockFacing face in BlockFacing.HORIZONTALS) {
+                nPos.Set(pos).Add(face);
                 Block nBlock = world.BlockAccessor.GetBlock(nPos);
                 if (nBlock.Replaceable >= 6000) {
-                    return true;
+                    nPos.Down();
+                    nBlock = world.BlockAccessor.GetBlock(nPos);
+                    if (nBlock.Replaceable >= 6000) {
+                        return true;
+                    }
                 }
             }
             return false;
