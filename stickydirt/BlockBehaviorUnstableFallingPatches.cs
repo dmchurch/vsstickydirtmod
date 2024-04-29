@@ -18,9 +18,9 @@ namespace stickydirt
         public static float MaxDropDelayHours = 0.1f;
         public static int SupportToPreventDrop = 7;
         // in the order NESWUD, just like BlockFacing.ALL_FACES
-        public static int[] SupportWeights = { 2, 2, 2, 2, 1, 10 }; // 3 walls + a block (or vegetation) on top is enough
-        public static int[] SupportBeamWeights = { 3, 3, 3, 3, 0, 10 }; // 1 support beam + 2 attached walls is enough, 2 support beams alone is not
-
+        public static int[] SupportWeights = { 2, 2, 2, 2, 2, 2 }; // 3 walls + a block (or vegetation) on top is enough
+        public static int[] SupportBeamWeights = { 3, 3, 3, 3, 0, 6 }; // 1 support beam + 2 attached walls is enough, 2 support beams alone is not
+        public static int RootSupport = 3; // Support when the above block is a BlockPlant
 
         [HarmonyPrefix, HarmonyPatch("TryFalling")]
         public static bool Before__TryFalling(BlockBehaviorUnstableFalling __instance, float ___fallSidewaysChance, ref bool __result, IWorldAccessor world, BlockPos pos, ref EnumHandling handling, ref string failureCode)
@@ -64,9 +64,9 @@ namespace stickydirt
                 tmpPos.Set(pos).Add(face);
                 Block block = blockAccessor.GetBlock(tmpPos);
 
-                // If this is a plant and it's on top, provide standard support without solidity tests (because roots)
+                // If this is a plant and it's on top, provide support based on roots
                 if (face == BlockFacing.UP && block is BlockPlant) {
-                    support += SupportWeights[i];
+                    support += RootSupport;
                     continue;
                 }
 
