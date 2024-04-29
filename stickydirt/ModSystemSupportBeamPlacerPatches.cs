@@ -4,7 +4,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
 
-namespace vsstickydirtmod
+namespace stickydirt
 {
     [HarmonyPatch(typeof(ModSystemSupportBeamPlacer))]
     public static class ModSystemSupportBeamPlacerPatches

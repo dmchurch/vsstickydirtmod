@@ -7,7 +7,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
-namespace vsstickydirtmod
+namespace stickydirt
 {
     public class StickyDirtModSystem : ModSystem
     {

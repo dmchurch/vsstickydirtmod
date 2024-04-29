@@ -8,7 +8,7 @@ using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
 
-namespace vsstickydirtmod
+namespace stickydirt
 {
 
     [HarmonyPatch(typeof(BlockBehaviorUnstableFalling))]
