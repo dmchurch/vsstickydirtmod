@@ -1,0 +1,13 @@
+{
+    "type": "code",
+    "modid": "vsstickydirtmod",
+    "name": "Sticky Dirt",
+    "authors": [
+        "Danielle Church"
+    ],
+    "description": "Makes dirt blocks less likely to to fall when soil instability is enabled.",
+    "version": "0.1.0",
+    "dependencies": {
+        "game": "1.19.7"
+    }
+}

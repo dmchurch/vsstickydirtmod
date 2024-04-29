@@ -1,0 +1,225 @@
+﻿using HarmonyLib;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
+
+namespace vsstickydirtmod
+{
+
+    [HarmonyPatch(typeof(BlockBehaviorUnstableFalling))]
+    public static class BlockBehaviorUnstableFallingPatches
+    {
+        public static ICoreAPI api => StickyDirtModSystem.api;
+        public static float MaxDropDelayHours = 0.1f;
+        //public static int SupportToResistDrop = 3;
+        public static int SupportToPreventDrop = 7;
+        // in the order NESWUD, just like BlockFacing.ALL_FACES
+        public static int[] SupportWeights = { 2, 2, 2, 2, 1, 10 }; // 3 walls + a block (or vegetation) on top is enough
+        public static int[] SupportBeamWeights = { 3, 3, 3, 3, 0, 10 }; // 1 support beam + 2 attached walls is enough, 2 support beams alone is not
+
+
+        [ThreadStatic]
+        public static BlockPos? lastPos;
+        [ThreadStatic]
+        public static BlockPos? lastNeighbor;
+
+        [HarmonyPrefix, HarmonyPatch("OnNeighbourBlockChange")]
+        public static void Before__OnNeighbourBlockChange(BlockBehaviorUnstableFalling __instance, IWorldAccessor world, BlockPos pos, BlockPos neibpos, ref EnumHandling handling)
+        {
+            if (world.Side != EnumAppSide.Server) return;
+            //api?.Logger.Notification($"Got ONBC at {pos}, neib @ {neibpos}, handling {handling}");
+            lastPos = pos;
+            lastNeighbor = neibpos;
+        }
+
+        [HarmonyPrefix, HarmonyPatch("TryFalling")]
+        public static bool Before__TryFalling(BlockBehaviorUnstableFalling __instance, float ___fallSidewaysChance, ref bool __result, IWorldAccessor world, BlockPos pos, ref EnumHandling handling, ref string failureCode)
+        {
+            if (world.Side != EnumAppSide.Server) return true;
+
+            if (!__instance.fallSideways || ___fallSidewaysChance > 0.5 || __instance.block.BlockMaterial != EnumBlockMaterial.Soil) {
+                //api.Logger.Notification($"Block {__instance.block} is not an unstable dirt block");
+                return true;
+            }
+            //BlockEntity be = world.BlockAccessor.GetBlockEntity(pos);
+            //BEBehaviorDelayedFall? bebdf = be?.GetBehavior<BEBehaviorDelayedFall>();
+            api.Logger.Notification($"TryFalling at {pos} ({pos.SubCopy(api.World.DefaultSpawnPosition.AsBlockPos)}: {__instance.block})");
+            if (__instance.IsReplacableBeneath(world, pos) || __instance.IsReplacableBeneathAndSideways(world, pos)) {
+                // This is at risk of falling if we pass the call on, check its support
+                int support = __instance.SupportCount(world, pos);
+                api.Logger.Notification($"  Block at {pos} has risk of falling, support count {support}");
+                //if (support >= SupportToResistDrop) {
+
+                    if (support >= SupportToPreventDrop) {
+                        api.Logger.Notification($"    Block at {pos} immune to drop");
+                        //bebdf?.Stabilize();
+                    //} else if (bebdf == null) {
+                    //    // support enough to resist drop, and no existing delayed-fall behavior
+                    //    float delay = (support - SupportToResistDrop + 1) * MaxDropDelayHours / (SupportToPreventDrop - SupportToResistDrop);
+
+                    //    bebdf = new BEBehaviorDelayedFall(be ?? new BlockEntityDelayedFall());
+                    //    bebdf.properties = new JsonObject(new JObject());
+
+                    //    if (be == null) {
+                    //        be = bebdf.Blockentity;
+                    //        be.Behaviors.Add(bebdf);
+                    //        be.Pos = pos;
+                    //        be.Initialize(world.Api); // calls bebdf.Initialize
+                    //        world.BlockAccessor.SpawnBlockEntity(be);
+                    //    }
+                    //    else {
+                    //        be.Behaviors.Add(bebdf);
+                    //        bebdf.Initialize(be.Api, bebdf.properties);
+                    //    }
+
+                    //    api.Logger.Notification($"    Block at {pos} resists drop for {delay} hours ({bebdf.DelayMillisecondsFor(delay)/1000} RT seconds)");
+                    //    bebdf.DelayFall(delay);
+                    //} else if (bebdf.HoursToDeadline <= 0) {
+                    //    // support enough to resist drop, existing delayed-fall has already timed out
+                    //    api.Logger.Notification($"    Block at {pos} stops resisting");
+                    //    bebdf.Remove();
+                    //    return true; // Pass through to TryFalling, allow it to drop
+                    //} else {
+                    //    // support enough to resist drop, existing delayed-fall still has time left
+                    //    api.Logger.Notification($"    Block at {pos} continues resisting for {bebdf.HoursToDeadline*60} game-minutes");
+                    //    // make sure this is registered
+                    //    bebdf.RegisterDelayedCallback();
+                    //}
+                    handling = EnumHandling.PassThrough;
+                    __result = false;
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // How much support does this block have?
+        public static int SupportCount(this BlockBehaviorUnstableFalling self, IWorldAccessor worldAccessor, BlockPos pos)
+        {
+            IBlockAccessor blockAccessor = worldAccessor.BlockAccessor;
+            int support = 0;
+            BlockPos tmpPos = pos.Copy();
+            Vec3d faceVec = pos.ToVec3d();
+            Vec3d beamVec = pos.ToVec3d();
+
+            ModSystemSupportBeamPlacer sbp = api.ModLoader.GetModSystem<ModSystemSupportBeamPlacer>();
+            SupportBeamsData? sbd = sbp?.GetSbData(pos);
+            //if (sbd.Beams.Count > 0) {
+            //    api?.Logger.Notification($"This pos {pos} to vec3d: {pos.ToVec3d()} top middle pos = {pos.AddCopy(self.block.TopMiddlePos.AsVec3i)}");
+            //}
+            //foreach (var beam in sbd.Beams) {
+            //    api?.Logger.Notification($"Beam from {beam.Start} to {beam.End}");
+            //}
+            foreach ((BlockFacing face, int i) in BlockFacing.ALLFACES.WithIndex())
+            {
+                tmpPos.Set(pos).Add(face);
+                Block block = blockAccessor.GetBlock(tmpPos);
+
+                // If this is a plant and it's on top, provide standard support without solidity tests (because roots)
+                if (face == BlockFacing.UP && block is BlockPlant) {
+                    support += SupportWeights[i];
+                    continue;
+                }
+
+                // If this is a non-SupportBeam, solid, attachable block on this side, provide standard support values
+                if (!(block is BlockSupportBeam)
+                    && block.Replaceable <= 6000
+                    && block.SideIsSolid(blockAccessor, tmpPos, face.Opposite.Index)
+                    && block.CanAttachBlockAt(blockAccessor, self.block, tmpPos, face.Opposite)) {
+                    support += SupportWeights[i];
+                    continue;
+                }
+
+                // center of adjoining face in that direction
+                faceVec.Set(face.Normald).Scale(0.5).Add(0.5, 0.5, 0.5).Add(pos);
+
+                foreach ((Vec3d start, Vec3d end) in sbd?.Beams ?? Enumerable.Empty<StartEnd>()) {
+                    bool startMatches = start.WithinFace(face, faceVec);
+                    bool endMatches = end.WithinFace(face, faceVec);
+                    if (startMatches != endMatches) { // must have exactly one end embedded in this face
+                        Vec3d nearSide = startMatches ? start : end;
+                        Vec3d farSide = startMatches ? end : start;
+                        double supportRatio = beamVec.Set(nearSide).Sub(farSide).FaceSupport(face);
+                        api.Logger.Notification($"Beam from {start} to {end} within {face} face ({face.Normald}) at {faceVec} generates {supportRatio} support");
+                        if (supportRatio >= 0.5) {
+                            support += SupportBeamWeights[i];
+                            break;
+                        }
+                    }
+                }
+
+            }
+            return support;
+        }
+
+        public static double FaceSupport(this Vec3d supportVec, BlockFacing face)
+        {
+            double supportLengthSq = supportVec.LengthSq();
+            double normalComponent = supportVec.Dot(face.Opposite.Normald);
+            if (normalComponent < 0) return 0; // pointing away, no support
+            // For a beam that points directly at the face, normalComponent == supportLength.
+            // A beam that is 45° off has normalComponent == supportLength / Sqrt(2), so normalComponent^2 / supportLengthSq == 0.5
+            return normalComponent * normalComponent / supportLengthSq;
+        }
+
+        public static bool WithinFace(this Vec3d point, BlockFacing face, Vec3d faceVec)
+        {
+            double normalDistance = Math.Abs(
+                face.Axis switch {
+                    EnumAxis.X => faceVec.X - point.X,
+                    EnumAxis.Y => faceVec.Y - point.Y,
+                    EnumAxis.Z => faceVec.Z - point.Z,
+                    _ => throw new ArgumentOutOfRangeException(nameof(face)),
+                });
+            if (normalDistance > 0.25) return false;
+
+            double planarDistance = Math.Max(
+                Math.Abs(face.Axis switch
+                {
+                    EnumAxis.X => faceVec.Z - point.Z,
+                    EnumAxis.Y => faceVec.X - point.X,
+                    EnumAxis.Z => faceVec.Y - point.Y,
+                    _ => throw new ArgumentOutOfRangeException(nameof(face)),
+                }),
+                Math.Abs(face.Axis switch
+                {
+                    EnumAxis.X => faceVec.Y - point.Y,
+                    EnumAxis.Y => faceVec.Z - point.Z,
+                    EnumAxis.Z => faceVec.X - point.X,
+                    _ => throw new ArgumentOutOfRangeException(nameof(face)),
+                }));
+            if (planarDistance > 0.6) return false;
+
+            return true;
+        }
+
+        public static void Deconstruct(this StartEnd self, out Vec3d start, out Vec3d end) => (start, end) = (self.Start, self.End);
+
+        public static double ManhattanDistanceTo(this Vec3d start, Vec3d end) => Math.Abs(end.X - start.X) + Math.Abs(end.Y - start.Y) + Math.Abs(end.Z - start.Z);
+
+        public static bool IsReplacableBeneath(this BlockBehaviorUnstableFalling _self, IWorldAccessor world, BlockPos pos)
+        {
+            Block bottomBlock = world.BlockAccessor.GetBlock(pos.DownCopy());
+            return bottomBlock.Replaceable > 6000;
+        }
+        public static bool IsReplacableBeneathAndSideways(this BlockBehaviorUnstableFalling _self, IWorldAccessor world, BlockPos pos)
+        {
+            BlockPos nPos = pos.Copy();
+            foreach ((BlockFacing face, int i) in BlockFacing.HORIZONTALS.WithIndex()) {
+                nPos.Set(nPos).Add(face);
+                Block nBlock = world.BlockAccessor.GetBlock(nPos);
+                if (nBlock.Replaceable >= 6000) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static IEnumerable<(T value, int index)> WithIndex<T>(this IEnumerable<T> self) => self.Select((value, i) => (value, i));
+    }
+}
