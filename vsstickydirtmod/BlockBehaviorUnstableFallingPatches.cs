@@ -16,26 +16,11 @@ namespace vsstickydirtmod
     {
         public static ICoreAPI api => StickyDirtModSystem.api;
         public static float MaxDropDelayHours = 0.1f;
-        //public static int SupportToResistDrop = 3;
         public static int SupportToPreventDrop = 7;
         // in the order NESWUD, just like BlockFacing.ALL_FACES
         public static int[] SupportWeights = { 2, 2, 2, 2, 1, 10 }; // 3 walls + a block (or vegetation) on top is enough
         public static int[] SupportBeamWeights = { 3, 3, 3, 3, 0, 10 }; // 1 support beam + 2 attached walls is enough, 2 support beams alone is not
 
-
-        [ThreadStatic]
-        public static BlockPos? lastPos;
-        [ThreadStatic]
-        public static BlockPos? lastNeighbor;
-
-        [HarmonyPrefix, HarmonyPatch("OnNeighbourBlockChange")]
-        public static void Before__OnNeighbourBlockChange(BlockBehaviorUnstableFalling __instance, IWorldAccessor world, BlockPos pos, BlockPos neibpos, ref EnumHandling handling)
-        {
-            if (world.Side != EnumAppSide.Server) return;
-            //api?.Logger.Notification($"Got ONBC at {pos}, neib @ {neibpos}, handling {handling}");
-            lastPos = pos;
-            lastNeighbor = neibpos;
-        }
 
         [HarmonyPrefix, HarmonyPatch("TryFalling")]
         public static bool Before__TryFalling(BlockBehaviorUnstableFalling __instance, float ___fallSidewaysChance, ref bool __result, IWorldAccessor world, BlockPos pos, ref EnumHandling handling, ref string failureCode)
@@ -46,50 +31,14 @@ namespace vsstickydirtmod
                 //api.Logger.Notification($"Block {__instance.block} is not an unstable dirt block");
                 return true;
             }
-            //BlockEntity be = world.BlockAccessor.GetBlockEntity(pos);
-            //BEBehaviorDelayedFall? bebdf = be?.GetBehavior<BEBehaviorDelayedFall>();
-            api.Logger.Notification($"TryFalling at {pos} ({pos.SubCopy(api.World.DefaultSpawnPosition.AsBlockPos)}: {__instance.block})");
+            //api.Logger.Debug($"TryFalling at {pos} ({__instance.block})");
             if (__instance.IsReplacableBeneath(world, pos) || __instance.IsReplacableBeneathAndSideways(world, pos)) {
                 // This is at risk of falling if we pass the call on, check its support
                 int support = __instance.SupportCount(world, pos);
-                api.Logger.Notification($"  Block at {pos} has risk of falling, support count {support}");
-                //if (support >= SupportToResistDrop) {
+                //api.Logger.Debug($"  Block at {pos} has risk of falling, support count {support}");
 
-                    if (support >= SupportToPreventDrop) {
-                        api.Logger.Notification($"    Block at {pos} immune to drop");
-                        //bebdf?.Stabilize();
-                    //} else if (bebdf == null) {
-                    //    // support enough to resist drop, and no existing delayed-fall behavior
-                    //    float delay = (support - SupportToResistDrop + 1) * MaxDropDelayHours / (SupportToPreventDrop - SupportToResistDrop);
-
-                    //    bebdf = new BEBehaviorDelayedFall(be ?? new BlockEntityDelayedFall());
-                    //    bebdf.properties = new JsonObject(new JObject());
-
-                    //    if (be == null) {
-                    //        be = bebdf.Blockentity;
-                    //        be.Behaviors.Add(bebdf);
-                    //        be.Pos = pos;
-                    //        be.Initialize(world.Api); // calls bebdf.Initialize
-                    //        world.BlockAccessor.SpawnBlockEntity(be);
-                    //    }
-                    //    else {
-                    //        be.Behaviors.Add(bebdf);
-                    //        bebdf.Initialize(be.Api, bebdf.properties);
-                    //    }
-
-                    //    api.Logger.Notification($"    Block at {pos} resists drop for {delay} hours ({bebdf.DelayMillisecondsFor(delay)/1000} RT seconds)");
-                    //    bebdf.DelayFall(delay);
-                    //} else if (bebdf.HoursToDeadline <= 0) {
-                    //    // support enough to resist drop, existing delayed-fall has already timed out
-                    //    api.Logger.Notification($"    Block at {pos} stops resisting");
-                    //    bebdf.Remove();
-                    //    return true; // Pass through to TryFalling, allow it to drop
-                    //} else {
-                    //    // support enough to resist drop, existing delayed-fall still has time left
-                    //    api.Logger.Notification($"    Block at {pos} continues resisting for {bebdf.HoursToDeadline*60} game-minutes");
-                    //    // make sure this is registered
-                    //    bebdf.RegisterDelayedCallback();
-                    //}
+                if (support >= SupportToPreventDrop) {
+                    //api.Logger.Debug($"    Block at {pos} immune to drop");
                     handling = EnumHandling.PassThrough;
                     __result = false;
                     return false;
@@ -109,12 +58,7 @@ namespace vsstickydirtmod
 
             ModSystemSupportBeamPlacer sbp = api.ModLoader.GetModSystem<ModSystemSupportBeamPlacer>();
             SupportBeamsData? sbd = sbp?.GetSbData(pos);
-            //if (sbd.Beams.Count > 0) {
-            //    api?.Logger.Notification($"This pos {pos} to vec3d: {pos.ToVec3d()} top middle pos = {pos.AddCopy(self.block.TopMiddlePos.AsVec3i)}");
-            //}
-            //foreach (var beam in sbd.Beams) {
-            //    api?.Logger.Notification($"Beam from {beam.Start} to {beam.End}");
-            //}
+
             foreach ((BlockFacing face, int i) in BlockFacing.ALLFACES.WithIndex())
             {
                 tmpPos.Set(pos).Add(face);
@@ -145,7 +89,7 @@ namespace vsstickydirtmod
                         Vec3d nearSide = startMatches ? start : end;
                         Vec3d farSide = startMatches ? end : start;
                         double supportRatio = beamVec.Set(nearSide).Sub(farSide).FaceSupport(face);
-                        api.Logger.Notification($"Beam from {start} to {end} within {face} face ({face.Normald}) at {faceVec} generates {supportRatio} support");
+                        //api.Logger.Debug($"Beam from {start} to {end} within {face} face ({face.Normald}) at {faceVec} generates {supportRatio} support");
                         if (supportRatio >= 0.5) {
                             support += SupportBeamWeights[i];
                             break;
