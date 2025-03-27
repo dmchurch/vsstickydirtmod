@@ -20,8 +20,13 @@ namespace stickydirt
             _api = api;
 
             if (!Harmony.HasAnyPatches(Mod.Info.ModID)) {
-                harmony = new Harmony(Mod.Info.ModID);
-                harmony.PatchAll(); // Applies all harmony patches
+                try {
+                    harmony = new Harmony(Mod.Info.ModID);
+                    harmony.PatchAll(); // Applies all harmony patches
+                } catch (Exception e) {
+                    Mod.Logger.Error(e.InnerException);
+                    throw;
+                }
             }
         }
 

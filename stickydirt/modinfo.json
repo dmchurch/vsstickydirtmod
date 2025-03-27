@@ -6,8 +6,8 @@
         "Danielle Church"
     ],
     "description": "Makes dirt blocks less likely to to fall when soil instability is enabled.",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "dependencies": {
-        "game": "1.19.7"
+        "game": "1.20.7"
     }
 }

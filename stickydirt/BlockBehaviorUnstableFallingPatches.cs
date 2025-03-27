@@ -23,7 +23,7 @@ namespace stickydirt
         public static int RootSupport = 3; // Support when the above block is a BlockPlant
 
         [HarmonyPrefix, HarmonyPatch("TryFalling")]
-        public static bool Before__TryFalling(BlockBehaviorUnstableFalling __instance, float ___fallSidewaysChance, ref bool __result, IWorldAccessor world, BlockPos pos, ref EnumHandling handling, ref string failureCode)
+        public static bool Before__TryFalling(BlockBehaviorUnstableFalling __instance, float ___fallSidewaysChance, ref bool __result, IWorldAccessor world, BlockPos pos, ref EnumHandling handling)
         {
             if (world.Side != EnumAppSide.Server) return true;
 
